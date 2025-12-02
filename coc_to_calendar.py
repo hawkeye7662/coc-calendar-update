@@ -74,6 +74,11 @@ def get_calendar_service():
     })
     # optionally inspect creds.__dict__ for more details (avoid printing secrets)
     print("creds attrs:", [k for k in creds.__dict__.keys()])
+    print("impersonation_url:", getattr(creds, "_service_account_impersonation_url", None))
+    print("impersonation_options:", getattr(creds, "_service_account_impersonation_options", None))
+    print("has_impersonated_creds:", hasattr(creds, "_impersonated_credentials"))
+    print("impersonated_creds_type:", type(getattr(creds, "_impersonated_credentials", None)).__name__)
+
     return build("calendar", "v3", credentials=creds)
 
 
