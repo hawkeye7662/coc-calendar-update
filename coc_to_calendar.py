@@ -61,7 +61,19 @@ def get_calendar_service():
             "No credentials found. "
             "Either set up Workload Identity Federation or provide service-account.json file."
         )
+    from google.auth import default
+    import pprint
 
+    creds, project = default(scopes=SCOPES)
+    pprint.pprint({
+        "creds_type": type(creds).__name__,
+        "service_account_email": getattr(creds, "service_account_email", None),
+        "target_principal": getattr(creds, "target_principal", None),
+        "with_subject": getattr(creds, "subject_token", None) is not None,
+        "project_detected": project,
+    })
+    # optionally inspect creds.__dict__ for more details (avoid printing secrets)
+    print("creds attrs:", [k for k in creds.__dict__.keys()])
     return build("calendar", "v3", credentials=creds)
 
 
