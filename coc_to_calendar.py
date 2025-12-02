@@ -1,7 +1,6 @@
 from __future__ import annotations
 import os
 import json
-import pickle
 import hashlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -9,8 +8,7 @@ from typing import Any, Dict, List
 import pytz
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 
 # Full calendar access
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
@@ -43,21 +41,26 @@ SECTION_TO_STATIC = {
 
 
 def get_calendar_service():
-    creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json", SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        with open("token.pickle", "wb") as token:
-            pickle.dump(creds, token)
+    """
+    Authenticate using Workload Identity Federation for GitHub Actions,
+    or service account file for local development.
+    """
+    # Check if running in GitHub Actions with Workload Identity Federation
+    if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+        # Workload Identity Federation - uses default credentials
+        from google.auth import default
+        creds, _ = default(scopes=SCOPES)
+    elif os.path.exists("service-account.json"):
+        # Running locally with service account
+        creds = service_account.Credentials.from_service_account_file(
+            "service-account.json",
+            scopes=SCOPES
+        )
+    else:
+        raise FileNotFoundError(
+            "No credentials found. "
+            "Either set up Workload Identity Federation or provide service-account.json file."
+        )
 
     return build("calendar", "v3", credentials=creds)
 
