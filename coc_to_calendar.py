@@ -61,23 +61,6 @@ def get_calendar_service():
             "No credentials found. "
             "Either set up Workload Identity Federation or provide service-account.json file."
         )
-    from google.auth import default
-    import pprint
-
-    creds, project = default(scopes=SCOPES)
-    pprint.pprint({
-        "creds_type": type(creds).__name__,
-        "service_account_email": getattr(creds, "service_account_email", None),
-        "target_principal": getattr(creds, "target_principal", None),
-        "with_subject": getattr(creds, "subject_token", None) is not None,
-        "project_detected": project,
-    })
-    # optionally inspect creds.__dict__ for more details (avoid printing secrets)
-    print("creds attrs:", [k for k in creds.__dict__.keys()])
-    print("impersonation_url:", getattr(creds, "_service_account_impersonation_url", None))
-    print("impersonation_options:", getattr(creds, "_service_account_impersonation_options", None))
-    print("has_impersonated_creds:", hasattr(creds, "_impersonated_credentials"))
-    print("impersonated_creds_type:", type(getattr(creds, "_impersonated_credentials", None)).__name__)
 
     return build("calendar", "v3", credentials=creds)
 
@@ -229,8 +212,10 @@ def create_or_update_event(
 def create_upgrade_events(
     coc_path: str,
     static_data_path: str,
-    calendar_id: str = "primary",
+    calendar_id: str | None = None,
 ):
+    if calendar_id is None:
+        calendar_id = os.environ.get("CALENDAR_ID", "primary")
     state = load_json(coc_path)
     name_maps = load_name_maps(static_data_path)
     service = get_calendar_service()
@@ -338,8 +323,9 @@ def create_upgrade_events(
 
 
 if __name__ == "__main__":
+    cal_id = os.environ.get("CALENDAR_ID", "primary")
     create_upgrade_events(
         coc_path="coc_state.json",
         static_data_path="static_data.json",
-        calendar_id="primary",
+        calendar_id=cal_id,
     )

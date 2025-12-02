@@ -29,4 +29,6 @@ jobs:
           pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client pytz
 
       - name: Run script
+        env:
+          CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
         run: python coc_to_calendar.py
