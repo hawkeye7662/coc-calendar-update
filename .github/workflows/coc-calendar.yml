@@ -29,4 +29,4 @@ jobs:
           pip install google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client pytz
 
       - name: Run script
-        run: python coc_calendar.py
+        run: python coc_to_calendar.py
