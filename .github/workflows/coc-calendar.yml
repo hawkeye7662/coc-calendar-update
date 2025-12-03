@@ -2,6 +2,9 @@ name: Update CoC Calendar
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'coc_state.json'
 
 permissions:
   id-token: write

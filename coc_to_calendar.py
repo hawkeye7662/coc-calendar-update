@@ -130,20 +130,6 @@ def make_label(
     return base_name
 
 
-def make_event_id_base(
-    player_tag: str,
-    json_section: str,
-    item: Dict[str, Any],
-    suffix: str = "",
-) -> str:
-    """
-    Deterministic event ID based on upgrade identity (not timestamp).
-    This allows us to update the same event when timers change.
-    """
-    raw = f"{player_tag}-{json_section}-{item.get('data')}-{item.get('lvl')}{suffix}"
-    return hashlib.md5(raw.encode()).hexdigest()
-
-
 def should_add_alarm(finish_dt: datetime) -> bool:
     """
     Determine if 'clashofclans' keyword should be added based on:
@@ -169,44 +155,62 @@ def should_add_alarm(finish_dt: datetime) -> bool:
     return True
 
 
+def delete_player_events(service, calendar_id: str, player_tag: str):
+    """
+    Delete all events for a specific player tag.
+    Events are identified by having the player tag in the event ID or description.
+    """
+    try:
+        # Get all events (we'll filter by our marker)
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            maxResults=2500,  # Adjust if you have more events
+            singleEvents=True,
+        ).execute()
+        
+        events = events_result.get('items', [])
+        deleted_count = 0
+        
+        for event in events:
+            event_id = event.get('id', '')
+            summary = event.get('summary', '')
+            
+            # Check if this event belongs to this player
+            # We'll mark events by including player tag in extended properties
+            extended_props = event.get('extendedProperties', {}).get('private', {})
+            if extended_props.get('player_tag') == player_tag:
+                try:
+                    service.events().delete(
+                        calendarId=calendar_id,
+                        eventId=event_id
+                    ).execute()
+                    deleted_count += 1
+                except HttpError:
+                    pass  # Event might already be deleted
+        
+        print(f"Deleted {deleted_count} events for player {player_tag}")
+        
+    except HttpError as e:
+        print(f"Error deleting events: {e}")
+
+
 def create_or_update_event(
     service,
     calendar_id: str,
-    event_id: str,
     event_body: dict,
     event_label: str,
 ):
     """
-    Try to update an existing event, or create it if it doesn't exist.
+    Create a new event.
     """
     try:
-        # Try to get the existing event
-        existing = service.events().get(calendarId=calendar_id, eventId=event_id).execute()
-        
-        # Update the existing event
-        service.events().update(
+        service.events().insert(
             calendarId=calendar_id,
-            eventId=event_id,
             body=event_body
         ).execute()
-        print(f"Updated: {event_label}")
-        
+        print(f"Created: {event_label}")
     except HttpError as e:
-        if e.resp.status == 404:
-            # Event doesn't exist, create it
-            try:
-                service.events().insert(
-                    calendarId=calendar_id,
-                    body=event_body
-                ).execute()
-                print(f"Created: {event_label}")
-            except HttpError as insert_error:
-                if insert_error.resp.status == 409:
-                    print(f"Already exists: {event_label}")
-                else:
-                    raise
-        else:
-            raise
+        print(f"Error creating event {event_label}: {e}")
 
 
 def create_upgrade_events(
@@ -225,6 +229,11 @@ def create_upgrade_events(
     
     # Get village name or fall back to player tag
     village_name = VILLAGE_NAMES.get(player_tag, player_tag)
+    
+    # Delete all existing events for this player
+    print(f"Deleting existing events for {village_name}...")
+    delete_player_events(service, calendar_id, player_tag)
+    print(f"Creating new events for {village_name}...")
 
     for json_section in SECTION_TO_STATIC.keys():
         items: List[Dict[str, Any]] = state.get(json_section, [])
@@ -249,8 +258,6 @@ def create_upgrade_events(
 
             label = make_label(json_section, item, name_maps)
             
-            # Main event - ID based on upgrade identity (not timestamp)
-            event_id = make_event_id_base(player_tag, json_section, item)
             summary = f"{village_name}: {label} upgrade finished"
             
             # Determine if we should add alarm keyword
@@ -259,7 +266,6 @@ def create_upgrade_events(
                 description = "clashofclans"
 
             event = {
-                "id": event_id,
                 "summary": summary,
                 "description": description,
                 "start": {
@@ -274,12 +280,16 @@ def create_upgrade_events(
                     "useDefault": False,
                     "overrides": []
                 },
+                "extendedProperties": {
+                    "private": {
+                        "player_tag": player_tag
+                    }
+                }
             }
 
             create_or_update_event(
                 service,
                 calendar_id,
-                event_id,
                 event,
                 f"[{json_section}] {summary}"
             )
@@ -292,11 +302,9 @@ def create_upgrade_events(
                 
                 # Check if 9 AM falls during work hours (Tuesday/Wednesday)
                 if should_add_alarm(alarm_dt):
-                    alarm_event_id = make_event_id_base(player_tag, json_section, item, "-9am")
                     alarm_summary = f"{village_name}: {label} finished (alarm)"
                     
                     alarm_event = {
-                        "id": alarm_event_id,
                         "summary": alarm_summary,
                         "description": "clashofclans",
                         "start": {
@@ -311,12 +319,16 @@ def create_upgrade_events(
                             "useDefault": False,
                             "overrides": []
                         },
+                        "extendedProperties": {
+                            "private": {
+                                "player_tag": player_tag
+                            }
+                        }
                     }
                     
                     create_or_update_event(
                         service,
                         calendar_id,
-                        alarm_event_id,
                         alarm_event,
                         f"[{json_section}] {alarm_summary}"
                     )
