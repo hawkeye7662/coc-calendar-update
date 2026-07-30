@@ -21,6 +21,7 @@ VILLAGE_NAMES = {
     "#YJP00J80": "Hawk Eye",
     "#GLRJV8JPC": "bruh",
     "#Y0CG8QJVL": "Valiant Warrior",
+    "#L9RVVQ2QU": "abcjjska"
 }
 
 # Mapping from keys in your CoC JSON -> section names in static_data.json
